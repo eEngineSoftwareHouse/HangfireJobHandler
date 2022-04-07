@@ -1,0 +1,37 @@
+﻿name: Publish NuGet Package to GitHub Packages
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install .NET Core
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: 5.0.x
+
+      - name: Pack nuget
+        run: dotnet pack --configuration Release
+
+      - name: Push Nuget to GitHub Packages
+        uses: tanaka-takayoshi/nuget-publish-to-github-packages-action@v2.1
+        with:
+          nupkg-path: './bin/Release/*.nupkg'
+          repo-owner: czarzy
+          gh-user: czarzy
+          token: ${{ secrets.GITHUB_TOKEN }}
+          skip-duplicate: true
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: Nuget Package
+          path: ./bin/Release
