@@ -6,6 +6,8 @@ namespace HangfireJobHandler
 {
     public interface IJobHandler
     {
+        void CleanupHangingTasks();
+
         /// <summary>
         /// Deleting job id from queue
         /// </summary>
