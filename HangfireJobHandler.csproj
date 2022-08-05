@@ -7,7 +7,7 @@
     <Company>Czarzo</Company>
     <Description>Hangfire job handler to avoid duplicate jobs.</Description>
     <Copyright></Copyright>
-    <RepositoryUrl>https://github.com/czarzy/HangfireJobHandler</RepositoryUrl>
+    <RepositoryUrl>https://github.com/eEngineSoftwareHouse/HangfireJobHandler</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>
