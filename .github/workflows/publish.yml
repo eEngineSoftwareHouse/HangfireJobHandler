@@ -25,8 +25,8 @@ jobs:
         uses: tanaka-takayoshi/nuget-publish-to-github-packages-action@v2.1
         with:
           nupkg-path: './bin/Release/*.nupkg'
-          repo-owner: czarzy
-          gh-user: czarzy
+          repo-owner: eEngineSoftwareHouse
+          gh-user: eengine-sync
           token: ${{ secrets.GITHUB_TOKEN }}
           skip-duplicate: true
 
