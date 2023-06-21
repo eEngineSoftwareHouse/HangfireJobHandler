@@ -17,20 +17,31 @@ namespace HangfireJobHandler
         {
             _logger = logger;
         }
-        public async Task<bool> TryEnqueueJobAsync(string jobId, Expression<Func<Task>> expression)
+        public async Task<bool> TryEnqueueJobAsync(string jobId, Expression<Func<Task>> expression, int delay)
         {
-            string query = $@"SELECT COUNT(1) 
+            string query = $@"SELECT JobRef
 FROM [{Environment.GetEnvironmentVariable("HANGFIRE_SCHEMA")}].[{Environment.GetEnvironmentVariable("HANGFIRE_JOB_TABLE")}]
 WHERE JobId = '{jobId}'";
             using (var connection = new SqlConnection($"{Environment.GetEnvironmentVariable("SQL_CONNECTIONSTRING")};database={Environment.GetEnvironmentVariable("HANGFIRE_DATABASE")};")) 
             {
-                int count = await connection.ExecuteScalarAsync<int>(query);
-                if(count == 0)
+                string jobRef = await connection.ExecuteScalarAsync<string>(query);
+                if(jobRef == null)
                 {
-                    string result = BackgroundJob.Enqueue(expression);
+                    string result = delay > 0 ? BackgroundJob.Schedule(expression, TimeSpan.FromMinutes(delay)) : BackgroundJob.Enqueue(expression);
                     string command = $@"INSERT INTO [{Environment.GetEnvironmentVariable("HANGFIRE_SCHEMA")}].[{Environment.GetEnvironmentVariable("HANGFIRE_JOB_TABLE")}] (JobId, JobRef) 
 VALUES ('{jobId}', '{result}')";
-                    BackgroundJob.ContinueJobWith(result, () => DeleteJobFromQueueAsync(jobId), JobContinuationOptions.OnAnyFinishedState);
+                    BackgroundJob.ContinueJobWith(result, () => DeleteJobFromQueueAsync(jobId, result), JobContinuationOptions.OnAnyFinishedState);
+                    await connection.ExecuteAsync(command, commandTimeout: 60);
+                    return true;
+                }
+                else if (jobRef != null && delay > 0)
+                {
+                    _logger.Information($"Replacing scheduled job: {jobId}, ref: {jobRef}.");
+                    BackgroundJob.Delete(jobRef);
+                    string result = BackgroundJob.Schedule(expression, TimeSpan.FromMinutes(delay));
+                    string command = $@"INSERT INTO [{Environment.GetEnvironmentVariable("HANGFIRE_SCHEMA")}].[{Environment.GetEnvironmentVariable("HANGFIRE_JOB_TABLE")}] (JobId, JobRef) 
+VALUES ('{jobId}', '{result}')";
+                    BackgroundJob.ContinueJobWith(result, () => DeleteJobFromQueueAsync(jobId, result), JobContinuationOptions.OnAnyFinishedState);
                     await connection.ExecuteAsync(command, commandTimeout: 60);
                     return true;
                 }
@@ -43,6 +54,16 @@ VALUES ('{jobId}', '{result}')";
         {
             string command = $@"DELETE FROM [{Environment.GetEnvironmentVariable("HANGFIRE_SCHEMA")}].[{Environment.GetEnvironmentVariable("HANGFIRE_JOB_TABLE")}] 
 WHERE JobId = '{jobId}'";
+            using (var connection = new SqlConnection($"{Environment.GetEnvironmentVariable("SQL_CONNECTIONSTRING")};database={Environment.GetEnvironmentVariable("HANGFIRE_DATABASE")};"))
+            {
+                await connection.ExecuteAsync(command, commandTimeout: 60);
+            }
+        }
+
+        public async Task DeleteJobFromQueueAsync(string jobId, string jobRef)
+        {
+            string command = $@"DELETE FROM [{Environment.GetEnvironmentVariable("HANGFIRE_SCHEMA")}].[{Environment.GetEnvironmentVariable("HANGFIRE_JOB_TABLE")}] 
+WHERE JobId = '{jobId}' and JobRef = '{jobRef}'";
             using (var connection = new SqlConnection($"{Environment.GetEnvironmentVariable("SQL_CONNECTIONSTRING")};database={Environment.GetEnvironmentVariable("HANGFIRE_DATABASE")};"))
             {
                 await connection.ExecuteAsync(command, commandTimeout: 60);
