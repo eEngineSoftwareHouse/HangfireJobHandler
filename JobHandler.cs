@@ -1,8 +1,10 @@
 ﻿using Dapper;
 using Hangfire;
+using Hangfire.States;
 using Serilog;
 using System;
 using System.Data.SqlClient;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 
@@ -79,6 +81,25 @@ WHERE j.StateId is null)";
             using (var connection = new SqlConnection($"{Environment.GetEnvironmentVariable("SQL_CONNECTIONSTRING")};database={Environment.GetEnvironmentVariable("HANGFIRE_DATABASE")};"))
             {
                 connection.Execute(command, commandTimeout: 60);
+            }
+        }
+
+        public async Task<bool> EnqueueAwaitingJobs(int treshold)
+        {
+            string command = $@"SELECT j.Id FROM [{Environment.GetEnvironmentVariable("HANGFIRE_SCHEMA")}].[{Environment.GetEnvironmentVariable("HANGFIRE_JOB_TABLE")}] j
+INNER JOIN [{Environment.GetEnvironmentVariable("HANGFIRE_SCHEMA")}].[State] s ON j.Id = s.JobId
+WHERE s.Name = 'Awaiting'
+AND s.CreatedAt < DATEADD(MINUTE, -@treshold, GETUTCDATE());";
+            using (var connection = new SqlConnection($"{Environment.GetEnvironmentVariable("SQL_CONNECTIONSTRING")};database={Environment.GetEnvironmentVariable("HANGFIRE_DATABASE")};"))
+            {
+                var jobsResult = await connection.QueryAsync<long>(command, new { treshold }, commandTimeout: 60);
+                var jobs = jobsResult.Select(x => x.ToString()).ToList();
+                var client = new BackgroundJobClient();
+                foreach (var jobId in jobs)
+                {
+                    client.ChangeState(jobId, new EnqueuedState(), "Awaiting");
+                }
+                return true;
             }
         }
     }
