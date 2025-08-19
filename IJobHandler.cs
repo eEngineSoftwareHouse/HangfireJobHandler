@@ -20,6 +20,12 @@ namespace HangfireJobHandler
         /// <param name="jobId">Your custom job Id</param>
         /// <param name="jobRef">Hangfire job reference</param>
         Task DeleteJobFromQueueAsync(string jobId, string jobRef);
+        
+        /// <summary>
+        /// Trying to enqueue jobs which are in 'Awaiting' state for more than the specified threshold.
+        /// </summary>
+        /// <param name="treshold">Threshold in minutes</param>
+        Task<bool> EnqueueAwaitingJobs(int treshold);
 
         /// <summary>
         /// Trying to enqueue job from expression with your custom ID if it's not being processed already.
